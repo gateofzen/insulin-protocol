@@ -77,7 +77,7 @@ label {
     font-weight: bold;
 }
 
-input[type="number"] {
+input[type="number"], input[type="text"] {
     width: 100%;
     padding: 8px;
     border: 1px solid #ddd;
@@ -163,13 +163,39 @@ th {
     background-color: #218838;
 }
 
-.clear-btn {
+.clear-btn, .delete-btn {
     background-color: #dc3545;
     margin-left: 10px;
 }
 
-.clear-btn:hover {
+.clear-btn:hover, .delete-btn:hover {
     background-color: #c82333;
+}
+
+.small-button {
+    padding: 5px 10px;
+    font-size: 14px;
+    margin-right: 5px;
+}
+
+.back-btn {
+    background-color: #6c757d;
+    margin-left: 10px;
+}
+
+.back-btn:hover {
+    background-color: #5a6268;
+}
+
+.patient-info {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 15px;
+}
+
+#patient-list-container {
+    margin-bottom: 30px;
 }
 
 @media (max-width: 600px) {
@@ -188,5 +214,15 @@ th {
     
     h1 {
         font-size: 24px;
+    }
+    
+    .patient-info {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+    
+    .back-btn {
+        margin-left: 0;
+        margin-top: 10px;
     }
 }

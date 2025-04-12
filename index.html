@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ICU インスリン注入プロトコル (IIP) 計算機</title>
+    <title>北大救急 インスリン投与プロトコル (IIP) 計算機</title>
     <link rel="stylesheet" href="styles.css">
     <!-- Chart.jsライブラリ（グラフ表示用） -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -12,181 +12,218 @@
 </head>
 <body>
     <div class="container">
-        <h1>ICU インスリン注入プロトコル (IIP) 計算機</h1>
-        <p>目標血糖値: 140-180 mg/dL</p>
-        <p>使用インスリン: ヒューマリンR (1単位/1mL 0.9%生理食塩水)</p>
+        <h1>北大救急 インスリン投与プロトコル (IIP) 計算機</h1>
         
-        <div class="info-box">
-            <strong>注意:</strong> このツールは、医療専門家による判断を補助するものであり、代替するものではありません。常に臨床判断を優先してください。
-        </div>
-        
-        <div class="tab-container">
-            <div class="tab-buttons">
-                <button class="tab-button active" onclick="openTab('initial')">初期設定</button>
-                <button class="tab-button" onclick="openTab('adjust')">インスリン調整</button>
-                <button class="tab-button" onclick="openTab('hypo')">低血糖対応</button>
-                <button class="tab-button" onclick="openTab('history')">データ履歴</button>
-                <button class="tab-button" onclick="openTab('info')">プロトコル情報</button>
+        <!-- 患者選択・登録エリア（初期表示） -->
+        <div id="patient-selection">
+            <h2>患者選択</h2>
+            <div class="info-box">
+                <strong>注意:</strong> このツールは、医療専門家による判断を補助するものであり、代替するものではありません。常に臨床判断を優先してください。
             </div>
             
-            <!-- 初期設定タブ -->
-            <div id="initial" class="tab-content active">
-                <h2>初期インスリン投与量計算</h2>
-                <div class="form-group">
-                    <label for="initialBG">初期血糖値 (mg/dL):</label>
-                    <input type="number" id="initialBG" min="0" step="1">
-                </div>
-                <button onclick="calculateInitialDose()">計算</button>
-                
-                <div id="initialResult" class="result">
-                    <h3>計算結果</h3>
-                    <p id="bolusDose"></p>
-                    <p id="initialRate"></p>
-                    <p id="initialNotes"></p>
-                    <p><strong>注意:</strong> IIP開始直後は<span style="color: #e74c3c;">2時間毎</span>に血糖測定を行ってください。</p>
-                </div>
-            </div>
-            
-            <!-- インスリン調整タブ -->
-            <div id="adjust" class="tab-content">
-                <h2>インスリン注入率調整</h2>
-                <div class="form-group">
-                    <label for="currentBG">現在の血糖値 (mg/dL):</label>
-                    <input type="number" id="currentBG" min="0" step="1">
-                </div>
-                <div class="form-group">
-                    <label for="previousBG">前回の血糖値 (mg/dL):</label>
-                    <input type="number" id="previousBG" min="0" step="1">
-                </div>
-                <div class="form-group">
-                    <label for="timeBetween">測定間隔 (時間):</label>
-                    <input type="number" id="timeBetween" min="1" max="4" value="2" step="1">
-                </div>
-                <div class="form-group">
-                    <label for="currentRate">現在のインスリン注入率 (単位/時):</label>
-                    <input type="number" id="currentRate" min="0" step="0.5">
-                </div>
-                <button onclick="calculateAdjustment()">調整計算</button>
-                
-                <div id="adjustResult" class="result">
-                    <h3>調整結果</h3>
-                    <p id="bgChange"></p>
-                    <p id="adjustedRate"></p>
-                    <p id="adjustNotes"></p>
-                </div>
-            </div>
-            
-            <!-- 低血糖対応タブ -->
-            <div id="hypo" class="tab-content">
-                <h2>低血糖時の対応</h2>
-                <div class="form-group">
-                    <label for="hypoBG">現在の血糖値 (mg/dL):</label>
-                    <input type="number" id="hypoBG" min="0" max="99" step="1">
-                </div>
-                <div class="form-group">
-                    <label for="hypoRate">現在のインスリン注入率 (単位/時):</label>
-                    <input type="number" id="hypoRate" min="0" step="0.5">
-                </div>
-                <button onclick="handleHypoglycemia()">対応確認</button>
-                
-                <div id="hypoResult" class="result">
-                    <h3>対応方法</h3>
-                    <p id="hypoAction"></p>
-                    <p id="hypoNotes"></p>
-                </div>
-            </div>
-            
-            <!-- データ履歴タブ -->
-            <div id="history" class="tab-content">
-                <h2>血糖値・インスリン履歴</h2>
-                
-                <div class="chart-container" style="position: relative; height:300px;">
-                    <canvas id="bgChart"></canvas>
-                </div>
-                
-                <h3>最近の記録</h3>
-                <table>
+            <div id="patient-list-container">
+                <h3>患者一覧</h3>
+                <table id="patient-list">
                     <thead>
                         <tr>
-                            <th>日時</th>
-                            <th>血糖値 (mg/dL)</th>
-                            <th>インスリン注入率 (単位/時)</th>
+                            <th>患者ID / 名前</th>
+                            <th>最終更新</th>
+                            <th>操作</th>
                         </tr>
                     </thead>
-                    <tbody id="historyTableBody">
-                        <!-- 履歴データがJavaScriptで挿入されます -->
+                    <tbody>
+                        <!-- 患者リストがJSで挿入されます -->
                     </tbody>
                 </table>
-                
-                <div style="margin-top: 20px;">
-                    <button onclick="generatePDFReport()" class="report-btn">PDF出力</button>
-                    <button onclick="clearHistory()" class="clear-btn">履歴クリア</button>
-                </div>
+                <p id="no-patients-message">登録された患者はいません。</p>
             </div>
             
-            <!-- プロトコル情報タブ -->
-            <div id="info" class="tab-content">
-                <h2>プロトコル情報</h2>
+            <div class="form-group">
+                <h3>新規患者登録</h3>
+                <label for="patient-id">患者ID / 名前:</label>
+                <input type="text" id="patient-id" placeholder="患者IDまたは名前を入力">
+                <button onclick="registerPatient()">登録 / IIP開始</button>
+            </div>
+        </div>
+        
+        <!-- IIP計算機エリア（患者選択後に表示） -->
+        <div id="iip-calculator" style="display: none;">
+            <div class="patient-info">
+                <h2 id="current-patient-name">患者: </h2>
+                <button onclick="returnToPatientList()" class="back-btn">患者選択に戻る</button>
+            </div>
+            
+            <p>目標血糖値: 140-180 mg/dL</p>
+            <p>使用インスリン: ヒューマリンR (1単位/1mL 0.9%生理食塩水)</p>
+            
+            <div class="tab-container">
+                <div class="tab-buttons">
+                    <button class="tab-button active" onclick="openTab('initial')">初期設定</button>
+                    <button class="tab-button" onclick="openTab('adjust')">インスリン調整</button>
+                    <button class="tab-button" onclick="openTab('hypo')">低血糖対応</button>
+                    <button class="tab-button" onclick="openTab('history')">データ履歴</button>
+                    <button class="tab-button" onclick="openTab('info')">プロトコル情報</button>
+                </div>
                 
-                <h3>適応</h3>
-                <p>ICU患者で血糖値が180 mg/dL以上が2回以上測定され、迅速な血糖正常化が見込めない患者。</p>
-                <p><strong>禁忌:</strong> 糖尿病性ケトアシドーシス(DKA)または高浸透圧高血糖状態(HHS)の患者には使用しないでください。</p>
+                <!-- 初期設定タブ -->
+                <div id="initial" class="tab-content active">
+                    <h2>初期インスリン投与量計算</h2>
+                    <div class="form-group">
+                        <label for="initialBG">初期血糖値 (mg/dL):</label>
+                        <input type="number" id="initialBG" min="0" step="1">
+                    </div>
+                    <button onclick="calculateInitialDose()">計算</button>
+                    
+                    <div id="initialResult" class="result">
+                        <h3>計算結果</h3>
+                        <p id="bolusDose"></p>
+                        <p id="initialRate"></p>
+                        <p id="initialNotes"></p>
+                        <p><strong>注意:</strong> IIP開始直後は<span style="color: #e74c3c;">2時間毎</span>に血糖測定を行ってください。</p>
+                    </div>
+                </div>
                 
-                <h3>インスリン製剤</h3>
-                <p>ヒューマリンR（1単位/1mL 0.9%生理食塩水）を使用します。</p>
+                <!-- インスリン調整タブ -->
+                <div id="adjust" class="tab-content">
+                    <h2>インスリン投与量調整</h2>
+                    <div class="form-group">
+                        <label for="currentBG">現在の血糖値 (mg/dL):</label>
+                        <input type="number" id="currentBG" min="0" step="1">
+                    </div>
+                    <div class="form-group">
+                        <label for="previousBG">前回の血糖値 (mg/dL):</label>
+                        <input type="number" id="previousBG" min="0" step="1">
+                    </div>
+                    <div class="form-group">
+                        <label for="timeBetween">測定間隔 (時間):</label>
+                        <input type="number" id="timeBetween" min="1" max="4" value="2" step="1">
+                    </div>
+                    <div class="form-group">
+                        <label for="currentRate">現在のインスリン投与量 (単位/時):</label>
+                        <input type="number" id="currentRate" min="0" step="0.5">
+                    </div>
+                    <button onclick="calculateAdjustment()">調整計算</button>
+                    
+                    <div id="adjustResult" class="result">
+                        <h3>調整結果</h3>
+                        <p id="bgChange"></p>
+                        <p id="adjustedRate"></p>
+                        <p id="adjustNotes"></p>
+                    </div>
+                </div>
                 
-                <h3>血糖値モニタリング</h3>
-                <ul>
-                    <li><strong>IIP開始直後</strong>: 2時間毎に血糖値を測定</li>
-                    <li><strong>安定後</strong>: 4回連続でインスリン投与量を変更せずに目標範囲内(140-180 mg/dL)となれば、4時間毎の測定に変更可能</li>
-                    <li><strong>IIP中止基準</strong>: インスリン投与量が0単位/時となり、12時間(4時間間隔で3回連続)血糖値が目標範囲内であればIIPを中止</li>
-                </ul>
+                <!-- 低血糖対応タブ -->
+                <div id="hypo" class="tab-content">
+                    <h2>低血糖時の対応</h2>
+                    <div class="form-group">
+                        <label for="hypoBG">現在の血糖値 (mg/dL):</label>
+                        <input type="number" id="hypoBG" min="0" max="99" step="1">
+                    </div>
+                    <div class="form-group">
+                        <label for="hypoRate">現在のインスリン投与量 (単位/時):</label>
+                        <input type="number" id="hypoRate" min="0" step="0.5">
+                    </div>
+                    <button onclick="handleHypoglycemia()">対応確認</button>
+                    
+                    <div id="hypoResult" class="result">
+                        <h3>対応方法</h3>
+                        <p id="hypoAction"></p>
+                        <p id="hypoNotes"></p>
+                    </div>
+                </div>
                 
-                <h3>低血糖時の対応</h3>
-                <ul>
-                    <li><strong>血糖値 &lt;50 mg/dL:</strong> インスリン注入を直ちに中止し、50%ブドウ糖液40mL（2アンプル）を静注。15分ごとに血糖値を再測定し、90 mg/dL以上になるまで継続。その後1時間ごとに測定し、140 mg/dL以上になったら30分待ってから前回の注入率の50%で再開。</li>
-                    <li><strong>血糖値 50-74 mg/dL:</strong> インスリン注入を直ちに中止し、50%ブドウ糖液20mL（1アンプル）を静注。15分ごとに血糖値を再測定し、90 mg/dL以上になるまで継続。その後1時間ごとに測定し、140 mg/dL以上になったら30分待ってから前回の注入率の50%で再開。</li>
-                    <li><strong>血糖値 75-99 mg/dL:</strong> インスリン注入を直ちに中止。15分ごとに血糖値を再測定し、90 mg/dL以上であることを確認。その後1時間ごとに測定し、140 mg/dL以上になったら30分待ってから前回の注入率の75%で再開。</li>
-                </ul>
+                <!-- データ履歴タブ -->
+                <div id="history" class="tab-content">
+                    <h2>血糖値・インスリン履歴</h2>
+                    
+                    <div class="chart-container" style="position: relative; height:300px;">
+                        <canvas id="bgChart"></canvas>
+                    </div>
+                    
+                    <h3>最近の記録</h3>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>日時</th>
+                                <th>血糖値 (mg/dL)</th>
+                                <th>インスリン投与量 (単位/時)</th>
+                            </tr>
+                        </thead>
+                        <tbody id="historyTableBody">
+                            <!-- 履歴データがJavaScriptで挿入されます -->
+                        </tbody>
+                    </table>
+                    
+                    <div style="margin-top: 20px;">
+                        <button onclick="generatePDFReport()" class="report-btn">PDF出力</button>
+                        <button onclick="clearPatientHistory()" class="clear-btn">履歴クリア</button>
+                    </div>
+                </div>
                 
-                <h3>インスリン調整のための変化率（Δ）</h3>
-                <table>
-                    <tr>
-                        <th>現在の注入率 (単位/時)</th>
-                        <th>Δ (単位/時)</th>
-                        <th>2Δ (単位/時)</th>
-                    </tr>
-                    <tr>
-                        <td>&lt;3.0</td>
-                        <td>0.5</td>
-                        <td>1</td>
-                    </tr>
-                    <tr>
-                        <td>3.0 – 6.0</td>
-                        <td>1</td>
-                        <td>2</td>
-                    </tr>
-                    <tr>
-                        <td>6.5 – 9.5</td>
-                        <td>1.5</td>
-                        <td>3</td>
-                    </tr>
-                    <tr>
-                        <td>10.0 – 14.5</td>
-                        <td>2</td>
-                        <td>4</td>
-                    </tr>
-                    <tr>
-                        <td>15 – 19.5</td>
-                        <td>3</td>
-                        <td>6</td>
-                    </tr>
-                    <tr>
-                        <td>≥ 20</td>
-                        <td>4</td>
-                        <td>8</td>
-                    </tr>
-                </table>
+                <!-- プロトコル情報タブ -->
+                <div id="info" class="tab-content">
+                    <h2>プロトコル情報</h2>
+                    
+                    <h3>適応</h3>
+                    <p>ICU患者で血糖値が180 mg/dL以上が2回以上測定され、迅速な血糖正常化が見込めない患者。</p>
+                    <p><strong>禁忌:</strong> 糖尿病性ケトアシドーシス(DKA)または高浸透圧高血糖状態(HHS)の患者には使用しないでください。</p>
+                    
+                    <h3>インスリン製剤</h3>
+                    <p>ヒューマリンR（1単位/1mL 0.9%生理食塩水）を使用します。</p>
+                    
+                    <h3>血糖値モニタリング</h3>
+                    <ul>
+                        <li><strong>IIP開始直後</strong>: 2時間毎に血糖値を測定</li>
+                        <li><strong>安定後</strong>: 4回連続でインスリン投与量を変更せずに目標範囲内(140-180 mg/dL)となれば、4時間毎の測定に変更可能</li>
+                        <li><strong>IIP中止基準</strong>: インスリン投与量が1単位/時未満となり、12時間(4時間間隔で3回連続)血糖値が目標範囲内であればIIPを中止</li>
+                    </ul>
+                    
+                    <h3>低血糖時の対応</h3>
+                    <ul>
+                        <li><strong>血糖値 &lt;50 mg/dL:</strong> インスリン投与を直ちに中止し、50%ブドウ糖液40mL（2アンプル）を静注。15分ごとに血糖値を再測定し、90 mg/dL以上になるまで継続。その後1時間ごとに測定し、140 mg/dL以上になったら30分待ってから前回の投与量の50%でインスリンを再開。</li>
+                        <li><strong>血糖値 50-74 mg/dL:</strong> インスリン投与を直ちに中止し、50%ブドウ糖液20mL（1アンプル）を静注。15分ごとに血糖値を再測定し、90 mg/dL以上になるまで継続。その後1時間ごとに測定し、140 mg/dL以上になったら30分待ってから前回の投与量の50%でインスリンを再開。</li>
+                        <li><strong>血糖値 75-99 mg/dL:</strong> インスリン投与を直ちに中止。15分ごとに血糖値を再測定し、90 mg/dL以上であることを確認。その後1時間ごとに測定し、140 mg/dL以上になったら30分待ってから前回の投与量の75%でインスリンを再開。</li>
+                    </ul>
+                    
+                    <h3>インスリン調整のための変化率（Δ）</h3>
+                    <table>
+                        <tr>
+                            <th>現在の投与量 (単位/時)</th>
+                            <th>Δ (単位/時)</th>
+                            <th>2Δ (単位/時)</th>
+                        </tr>
+                        <tr>
+                            <td>&lt;3.0</td>
+                            <td>0.5</td>
+                            <td>1</td>
+                        </tr>
+                        <tr>
+                            <td>3.0 – 6.0</td>
+                            <td>1</td>
+                            <td>2</td>
+                        </tr>
+                        <tr>
+                            <td>6.5 – 9.5</td>
+                            <td>1.5</td>
+                            <td>3</td>
+                        </tr>
+                        <tr>
+                            <td>10.0 – 14.5</td>
+                            <td>2</td>
+                            <td>4</td>
+                        </tr>
+                        <tr>
+                            <td>15 – 19.5</td>
+                            <td>3</td>
+                            <td>6</td>
+                        </tr>
+                        <tr>
+                            <td>≥ 20</td>
+                            <td>4</td>
+                            <td>8</td>
+                        </tr>
+                    </table>
+                </div>
             </div>
         </div>
     </div>

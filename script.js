@@ -1,0 +1,501 @@
+// タブ切り替え機能
+function openTab(tabName) {
+    const tabContents = document.getElementsByClassName('tab-content');
+    for (let i = 0; i < tabContents.length; i++) {
+        tabContents[i].classList.remove('active');
+    }
+    
+    const tabButtons = document.getElementsByClassName('tab-button');
+    for (let i = 0; i < tabButtons.length; i++) {
+        tabButtons[i].classList.remove('active');
+    }
+    
+    document.getElementById(tabName).classList.add('active');
+    event.currentTarget.classList.add('active');
+}
+
+// 血糖値とインスリン注入率の履歴を保存する配列
+let bgHistory = [];
+let insulinRateHistory = [];
+let timestamps = [];
+
+// 測定間隔に関する変数
+let stableReadingsCount = 0;
+let zeroInsulinStableReadingsCount = 0;
+
+// 履歴データをローカルストレージから読み込む
+function loadHistory() {
+    const savedBgHistory = localStorage.getItem('bgHistory');
+    const savedInsulinRateHistory = localStorage.getItem('insulinRateHistory');
+    const savedTimestamps = localStorage.getItem('timestamps');
+    
+    if (savedBgHistory && savedInsulinRateHistory && savedTimestamps) {
+        bgHistory = JSON.parse(savedBgHistory);
+        insulinRateHistory = JSON.parse(savedInsulinRateHistory);
+        timestamps = JSON.parse(savedTimestamps);
+        updateHistoryTable();
+        if (typeof drawBGChart === 'function') {
+            drawBGChart();
+        }
+    }
+}
+
+// 新しいデータポイントを履歴に追加
+function addDataPoint(bg, insulinRate) {
+    const now = new Date();
+    bgHistory.push(bg);
+    insulinRateHistory.push(insulinRate);
+    timestamps.push(now.toISOString());
+    
+    // 最大100ポイントに制限
+    if (bgHistory.length > 100) {
+        bgHistory.shift();
+        insulinRateHistory.shift();
+        timestamps.shift();
+    }
+    
+    // ローカルストレージに保存
+    localStorage.setItem('bgHistory', JSON.stringify(bgHistory));
+    localStorage.setItem('insulinRateHistory', JSON.stringify(insulinRateHistory));
+    localStorage.setItem('timestamps', JSON.stringify(timestamps));
+    
+    updateHistoryTable();
+    if (typeof drawBGChart === 'function') {
+        drawBGChart();
+    }
+}
+
+// 履歴テーブルを更新
+function updateHistoryTable() {
+    const tableBody = document.getElementById('historyTableBody');
+    if (!tableBody) return;
+    
+    // テーブルをクリア
+    tableBody.innerHTML = '';
+    
+    // 最新の10エントリを表示（降順）
+    for (let i = bgHistory.length - 1; i >= Math.max(0, bgHistory.length - 10); i--) {
+        const row = document.createElement('tr');
+        
+        const timeCell = document.createElement('td');
+        const date = new Date(timestamps[i]);
+        timeCell.textContent = date.toLocaleString();
+        row.appendChild(timeCell);
+        
+        const bgCell = document.createElement('td');
+        bgCell.textContent = bgHistory[i];
+        // 血糖値に応じた色分け
+        if (bgHistory[i] < 70) {
+            bgCell.style.color = 'red';
+        } else if (bgHistory[i] >= 140 && bgHistory[i] <= 180) {
+            bgCell.style.color = 'green';
+        } else if (bgHistory[i] > 180) {
+            bgCell.style.color = 'orange';
+        }
+        row.appendChild(bgCell);
+        
+        const rateCell = document.createElement('td');
+        rateCell.textContent = insulinRateHistory[i];
+        row.appendChild(rateCell);
+        
+        tableBody.appendChild(row);
+    }
+}
+
+// 血糖値チャートを描画（Chart.jsライブラリが読み込まれている場合のみ）
+function drawBGChart() {
+    const ctx = document.getElementById('bgChart');
+    if (!ctx || typeof Chart === 'undefined') return;
+    
+    // 既存のチャートがあれば破棄
+    if (window.bgLineChart) {
+        window.bgLineChart.destroy();
+    }
+    
+    // チャート用の日時フォーマット
+    const formattedDates = timestamps.map(ts => {
+        const date = new Date(ts);
+        return date.getHours() + ':' + (date.getMinutes() < 10 ? '0' : '') + date.getMinutes();
+    });
+    
+    // チャート作成
+    window.bgLineChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: formattedDates,
+            datasets: [
+                {
+                    label: '血糖値 (mg/dL)',
+                    data: bgHistory,
+                    borderColor: 'rgba(75, 192, 192, 1)',
+                    backgroundColor: 'rgba(75, 192, 192, 0.2)',
+                    borderWidth: 2,
+                    fill: false
+                },
+                {
+                    label: 'インスリン注入率 (単位/時)',
+                    data: insulinRateHistory,
+                    borderColor: 'rgba(153, 102, 255, 1)',
+                    backgroundColor: 'rgba(153, 102, 255, 0.2)',
+                    borderWidth: 2,
+                    fill: false,
+                    yAxisID: 'y-insulin'
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            scales: {
+                x: {
+                    title: {
+                        display: true,
+                        text: '時間'
+                    }
+                },
+                y: {
+                    title: {
+                        display: true,
+                        text: '血糖値 (mg/dL)'
+                    },
+                    min: 0,
+                    max: 400,
+                    grid: {
+                        color: function(context) {
+                            if (context.tick.value === 140 || context.tick.value === 180) {
+                                return 'rgba(0, 255, 0, 0.5)';
+                            }
+                            if (context.tick.value === 70) {
+                                return 'rgba(255, 0, 0, 0.5)';
+                            }
+                            return 'rgba(0, 0, 0, 0.1)';
+                        }
+                    }
+                },
+                'y-insulin': {
+                    position: 'right',
+                    title: {
+                        display: true,
+                        text: 'インスリン注入率 (単位/時)'
+                    },
+                    min: 0,
+                    grid: {
+                        drawOnChartArea: false
+                    }
+                }
+            }
+        }
+    });
+}
+
+// 履歴クリア機能
+function clearHistory() {
+    if (confirm('履歴データをすべて削除しますか？この操作は元に戻せません。')) {
+        bgHistory = [];
+        insulinRateHistory = [];
+        timestamps = [];
+        localStorage.removeItem('bgHistory');
+        localStorage.removeItem('insulinRateHistory');
+        localStorage.removeItem('timestamps');
+        updateHistoryTable();
+        if (typeof drawBGChart === 'function') {
+            drawBGChart();
+        }
+        alert('履歴データを削除しました。');
+    }
+}
+
+// 初期インスリン投与量計算
+function calculateInitialDose() {
+    const initialBG = parseFloat(document.getElementById('initialBG').value);
+    
+    if (isNaN(initialBG) || initialBG <= 0) {
+        alert('有効な血糖値を入力してください');
+        return;
+    }
+    
+    let bolusDose = 0;
+    let rate = 0;
+    let notes = '';
+    
+    if (initialBG < 180) {
+        notes = 'インスリン注入は血糖値が180 mg/dL以上の場合に推奨されます。';
+    } else {
+        // 初期インスリン量の計算: BG÷100を四捨五入で0.5単位ごとに切り上げ/切り下げ
+        rate = Math.round((initialBG / 100) * 2) / 2;
+        
+        if (initialBG >= 300) {
+            bolusDose = rate; // 300以上でボーラス投与
+            notes = `初期BG = ${initialBG} mg/dL: ${initialBG} ÷ 100 = ${(initialBG / 100).toFixed(2)}、${rate}単位に丸め: IV ボーラス ${bolusDose} 単位 + インスリン注入開始 @ ${rate} 単位/時`;
+        } else {
+            notes = `初期BG = ${initialBG} mg/dL: ${initialBG} ÷ 100 = ${(initialBG / 100).toFixed(2)}、${rate}単位に丸め: ボーラスなし、インスリン注入開始 @ ${rate} 単位/時`;
+        }
+    }
+    
+    // 結果の表示
+    document.getElementById('bolusDose').textContent = bolusDose > 0 ? `ボーラス投与: ${bolusDose} 単位` : 'ボーラス投与: 不要';
+    document.getElementById('initialRate').textContent = `インスリン注入率: ${rate} 単位/時`;
+    document.getElementById('initialNotes').textContent = notes;
+    document.getElementById('initialResult').style.display = 'block';
+    
+    // 履歴に追加
+    if (rate > 0) {
+        addDataPoint(initialBG, rate);
+    }
+}
+
+// インスリン注入率の調整計算
+function calculateAdjustment() {
+    const currentBG = parseFloat(document.getElementById('currentBG').value);
+    const previousBG = parseFloat(document.getElementById('previousBG').value);
+    const timeBetween = parseFloat(document.getElementById('timeBetween').value);
+    const currentRate = parseFloat(document.getElementById('currentRate').value);
+    
+    if (isNaN(currentBG) || isNaN(previousBG) || isNaN(timeBetween) || isNaN(currentRate) || 
+        currentBG <= 0 || previousBG <= 0 || timeBetween <= 0 || currentRate < 0) {
+        alert('すべての項目に有効な値を入力してください');
+        return;
+    }
+    
+    // 時間あたりの血糖値変化率を計算
+    const bgChangeTotal = currentBG - previousBG;
+    const bgChangeRate = timeBetween > 1 ? bgChangeTotal / timeBetween : bgChangeTotal;
+    
+    let action = '';
+    let newRate = currentRate;
+    
+    // BG < 100 mg/dLの場合は低血糖対応タブへ
+    if (currentBG < 100) {
+        alert('現在の血糖値が100 mg/dL未満です。低血糖対応タブを使用してください。');
+        openTab('hypo');
+        document.getElementById('hypoBG').value = currentBG;
+        document.getElementById('hypoRate').value = currentRate;
+        return;
+    }
+    
+    // 血糖値と変化率に基づく調整
+    if (currentBG >= 100 && currentBG < 140) {
+        // BG 100-139 mg/dL
+        if (bgChangeRate > 0) {
+            action = 'インスリン注入率を変更しない（目標範囲内に近づいている）';
+        } else if (bgChangeRate >= -20 && bgChangeRate <= 0) {
+            action = 'インスリン注入率を変更しない';
+        } else if (bgChangeRate < -20) {
+            // インスリン中止・特別対応
+            action = 'インスリン注入を一時中止し、30分後に血糖値を再確認、100 mg/dL以上の場合は前回注入率の75%で再開';
+            newRate = 0;
+        }
+    } else if (currentBG >= 140 && currentBG <= 180) {
+        // BG 140-180 mg/dL（目標範囲内）
+        if (bgChangeRate > 40) {
+            action = `インスリン注入率を増加 (+"Δ"): +${getDelta(currentRate)} 単位/時`;
+            newRate = currentRate + getDelta(currentRate);
+        } else if (bgChangeRate >= -20 && bgChangeRate <= 40) {
+            action = 'インスリン注入率を変更しない（目標範囲内）';
+        } else if (bgChangeRate < -20 && bgChangeRate >= -40) {
+            action = `インスリン注入率を減少 (-"Δ"): -${getDelta(currentRate)} 単位/時`;
+            newRate = Math.max(0, currentRate - getDelta(currentRate));
+        } else if (bgChangeRate < -40) {
+            action = `インスリンを30分間一時中止後、注入率を減少 (-"2Δ"): -${2 * getDelta(currentRate)} 単位/時`;
+            newRate = Math.max(0, currentRate - 2 * getDelta(currentRate));
+        }
+    } else if (currentBG > 180 && currentBG < 250) {
+        // BG 181-249 mg/dL
+        if (bgChangeRate >= 0) {
+            action = `インスリン注入率を増加 (+"Δ"): +${getDelta(currentRate)} 単位/時`;
+            newRate = currentRate + getDelta(currentRate);
+        } else if (bgChangeRate >= -40) {
+            action = 'インスリン注入率を変更しない';
+        } else if (bgChangeRate >= -80 && bgChangeRate < -40) {
+            action = `インスリン注入率を減少 (-"Δ"): -${getDelta(currentRate)} 単位/時`;
+            newRate = Math.max(0, currentRate - getDelta(currentRate));
+        } else if (bgChangeRate < -80) {
+            action = `インスリンを30分間一時中止後、注入率を減少 (-"2Δ"): -${2 * getDelta(currentRate)} 単位/時`;
+            newRate = Math.max(0, currentRate - 2 * getDelta(currentRate));
+        }
+    } else if (currentBG >= 250) {
+        // BG ≥ 250 mg/dL
+        if (bgChangeRate > 0) {
+            action = `インスリン注入率を大幅増加 (+"2Δ"): +${2 * getDelta(currentRate)} 単位/時`;
+            newRate = currentRate + 2 * getDelta(currentRate);
+        } else if (bgChangeRate >= -40) {
+            action = `インスリン注入率を増加 (+"Δ"): +${getDelta(currentRate)} 単位/時`;
+            newRate = currentRate + getDelta(currentRate);
+        } else if (bgChangeRate >= -80 && bgChangeRate < -40) {
+            action = 'インスリン注入率を変更しない（適切に低下中）';
+        } else if (bgChangeRate >= -120 && bgChangeRate < -80) {
+            action = `インスリン注入率を減少 (-"Δ"): -${getDelta(currentRate)} 単位/時`;
+            newRate = Math.max(0, currentRate - getDelta(currentRate));
+        } else if (bgChangeRate < -120) {
+            action = `インスリンを30分間一時中止後、注入率を減少 (-"2Δ"): -${2 * getDelta(currentRate)} 単位/時`;
+            newRate = Math.max(0, currentRate - 2 * getDelta(currentRate));
+        }
+    }
+    
+    // 結果の表示
+    document.getElementById('bgChange').textContent = `血糖値変化: ${previousBG} → ${currentBG} mg/dL (${bgChangeRate.toFixed(1)} mg/dL/時間)`;
+    document.getElementById('adjustedRate').textContent = `調整後のインスリン注入率: ${newRate.toFixed(1)} 単位/時`;
+    document.getElementById('adjustNotes').textContent = action;
+    document.getElementById('adjustResult').style.display = 'block';
+    
+    // 安定性の判定
+    const isInTargetRange = currentBG >= 140 && currentBG <= 180;
+    const isRateUnchanged = Math.abs(newRate - currentRate) < 0.01; // 浮動小数点の比較のため余裕を持たせる
+    
+    if (isInTargetRange && isRateUnchanged) {
+        stableReadingsCount++;
+        
+        // インスリン投与量が0で目標範囲内
+        if (newRate === 0) {
+            zeroInsulinStableReadingsCount++;
+            
+            if (zeroInsulinStableReadingsCount >= 3) {
+                // IIP中止の提案
+                document.getElementById('adjustNotes').textContent += 
+                    '\n\n重要: インスリン投与量0単位/時で12時間（4時間間隔で3回連続）目標範囲内を維持しました。IIPの中止を検討してください。';
+            }
+        } else {
+            zeroInsulinStableReadingsCount = 0;
+        }
+        
+        // 測定間隔の提案
+        let intervalNote = '';
+        if (stableReadingsCount >= 4) {
+            intervalNote = '4回連続で安定したため、次回の血糖測定は4時間後に行ってください。';
+        } else {
+            intervalNote = `目標範囲内で安定: ${stableReadingsCount}/4回。${4 - stableReadingsCount}回連続安定すれば測定間隔を4時間に延長できます。`;
+        }
+        
+        document.getElementById('adjustNotes').textContent += '\n\n' + intervalNote;
+    } else {
+        stableReadingsCount = 0;
+        if (newRate === 0) {
+            // 測定値は目標範囲外だがインスリン0の場合はカウントリセットしない
+            if (isInTargetRange) {
+                zeroInsulinStableReadingsCount++;
+            } else {
+                zeroInsulinStableReadingsCount = 0;
+            }
+        } else {
+            zeroInsulinStableReadingsCount = 0;
+        }
+        
+        document.getElementById('adjustNotes').textContent += '\n\n注意: 安定していないため、次回測定は2時間後に行ってください。';
+    }
+    
+    // 履歴に追加
+    addDataPoint(currentBG, newRate);
+}
+
+// 低血糖対応の処理 - 日本の製剤サイズに合わせて修正
+function handleHypoglycemia() {
+    const hypoBG = parseFloat(document.getElementById('hypoBG').value);
+    const hypoRate = parseFloat(document.getElementById('hypoRate').value);
+    
+    if (isNaN(hypoBG) || isNaN(hypoRate) || hypoBG < 0 || hypoRate < 0) {
+        alert('有効な値を入力してください');
+        return;
+    }
+    
+    let action = '';
+    let notes = '';
+    let resumeRate = 0;
+    
+    if (hypoBG < 50) {
+        // 日本の製剤サイズに合わせて修正（50%ブドウ糖40mL）
+        action = 'インスリン注入を直ちに中止し、50%ブドウ糖液40mL（2アンプル）を静注';
+        notes = '15分ごとに血糖値を再測定し、90 mg/dL以上になるまで継続。その後1時間ごとに測定し、140 mg/dL以上になったら30分待ってから前回の注入率の50%で再開';
+        resumeRate = hypoRate * 0.5;
+    } else if (hypoBG >= 50 && hypoBG < 75) {
+        // 日本の製剤サイズに合わせて修正（50%ブドウ糖20mL）
+        action = 'インスリン注入を直ちに中止し、50%ブドウ糖液20mL（1アンプル）を静注';
+        notes = '15分ごとに血糖値を再測定し、90 mg/dL以上になるまで継続。その後1時間ごとに測定し、140 mg/dL以上になったら30分待ってから前回の注入率の50%で再開';
+        resumeRate = hypoRate * 0.5;
+    } else if (hypoBG >= 75 && hypoBG < 100) {
+        action = 'インスリン注入を直ちに中止';
+        notes = '15分ごとに血糖値を再測定し、90 mg/dL以上であることを確認。その後1時間ごとに測定し、140 mg/dL以上になったら30分待ってから前回の注入率の75%で再開';
+        resumeRate = hypoRate * 0.75;
+    }
+    
+    // 結果の表示
+    document.getElementById('hypoAction').textContent = action;
+    document.getElementById('hypoNotes').textContent = `${notes}（再開時の注入率: ${resumeRate.toFixed(1)} 単位/時）`;
+    document.getElementById('hypoResult').style.display = 'block';
+    
+    // 履歴に追加
+    addDataPoint(hypoBG, 0); // 低血糖時はインスリン注入率0
+}
+
+// Δ値の取得（現在のインスリン注入率に基づく）
+function getDelta(rate) {
+    if (rate < 3) {
+        return 0.5;
+    } else if (rate >= 3 && rate <= 6) {
+        return 1;
+    } else if (rate > 6 && rate <= 9.5) {
+        return 1.5;
+    } else if (rate > 9.5 && rate <= 14.5) {
+        return 2;
+    } else if (rate > 14.5 && rate <= 19.5) {
+        return 3;
+    } else if (rate > 19.5) {
+        return 4;
+    }
+}
+
+// PDFレポート生成機能（jsPDF ライブラリが存在する場合のみ）
+function generatePDFReport() {
+    if (typeof jspdf === 'undefined' || typeof jspdf.jsPDF === 'undefined') {
+        alert('PDFを生成するためのライブラリが読み込まれていません。');
+        return;
+    }
+    
+    const { jsPDF } = jspdf;
+    const doc = new jsPDF();
+    
+    // タイトルと日時
+    doc.setFontSize(18);
+    doc.text('インスリン注入プロトコル記録', 10, 20);
+    doc.setFontSize(12);
+    doc.text(`作成日時: ${new Date().toLocaleString()}`, 10, 30);
+    
+    // 患者情報（実際の実装では入力フォームから取得）
+    doc.text('患者ID: ____________', 10, 40);
+    doc.text('患者名: ____________', 10, 50);
+    
+    // 血糖値履歴テーブル
+    doc.setFontSize(14);
+    doc.text('血糖値およびインスリン注入率履歴', 10, 70);
+    
+    // テーブルヘッダー
+    doc.setFontSize(10);
+    doc.text('日時', 10, 80);
+    doc.text('血糖値 (mg/dL)', 60, 80);
+    doc.text('インスリン注入率 (単位/時)', 120, 80);
+    
+    // テーブルデータ
+    let yPos = 90;
+    const maxEntries = Math.min(bgHistory.length, 20); // 最大20エントリ
+    
+    for (let i = bgHistory.length - 1; i >= bgHistory.length - maxEntries; i--) {
+        if (i < 0) break;
+        const date = new Date(timestamps[i]).toLocaleString();
+        doc.text(date, 10, yPos);
+        doc.text(bgHistory[i].toString(), 60, yPos);
+        doc.text(insulinRateHistory[i].toString(), 120, yPos);
+        yPos += 10;
+        
+        // ページが足りなくなったら新しいページを追加
+        if (yPos > 280) {
+            doc.addPage();
+            yPos = 20;
+        }
+    }
+    
+    // PDFを保存
+    doc.save('insulin_protocol_report.pdf');
+}
+
+// ページ読み込み時に履歴を読み込む
+window.addEventListener('load', function() {
+    loadHistory();
+});

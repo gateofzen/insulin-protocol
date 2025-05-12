@@ -432,7 +432,7 @@ function calculateInitialDose() {
     }
 }
 
-// インスリン投与量の調整計算
+// インスリン投与量の調整計算 - 目標範囲140-180mg/dLに完全最適化
 function calculateAdjustment() {
     const currentBG = parseFloat(document.getElementById('currentBG').value);
     const previousBG = parseFloat(document.getElementById('previousBG').value);
@@ -463,60 +463,98 @@ function calculateAdjustment() {
     
     // 血糖値と変化率に基づく調整
     if (currentBG >= 100 && currentBG < 140) {
-        // BG 100-139 mg/dL
-        if (bgChangeRate > 0) {
-            action = 'インスリン投与量を変更しない（目標範囲内に近づいている）';
-        } else if (bgChangeRate >= -20 && bgChangeRate <= 0) {
-            action = 'インスリン投与量を変更しない';
-        } else if (bgChangeRate < -20) {
-            // インスリン中止・特別対応
-            action = 'インスリン投与を一時中止し、30分後に血糖値を再確認、100 mg/dL以上の場合は前回投与量の75%でインスリンを再開';
-            newRate = 0;
+        // 修正：BG 100-139 mg/dL（目標値より低い）
+        if (currentBG >= 130) {
+            // 130-139の範囲：少し下がっている程度なのでΔ分減量
+            action = `血糖値が目標範囲下限（140mg/dL）を下回っています。インスリン投与量を減少 (-"Δ"): -${getDelta(currentRate)} 単位/時`;
+            newRate = Math.max(0, currentRate - getDelta(currentRate));
+        } else if (currentBG >= 110 && currentBG < 130) {
+            // 110-129の範囲：かなり下がっているので2Δ分減量
+            action = `血糖値が目標範囲より大幅に低下しています。インスリン投与量を大きく減少 (-"2Δ"): -${2 * getDelta(currentRate)} 単位/時`;
+            newRate = Math.max(0, currentRate - 2 * getDelta(currentRate));
+        } else {
+            // 100-109の範囲：かなり低いので一時中止または大幅減量
+            if (bgChangeRate < 0) {
+                // まだ下がり続けている場合は一時中止
+                action = 'インスリン投与を一時中止し、30分後に血糖値を再確認、100 mg/dL以上の場合は前回投与量の50%でインスリンを再開';
+                newRate = 0;
+            } else {
+                // 上昇に転じている場合は大幅減量
+                action = `血糖値が目標範囲から大幅に低下しています。インスリン投与量を半減: 前回の${currentRate}単位/時から${(currentRate * 0.5).toFixed(1)}単位/時に減量`;
+                newRate = currentRate * 0.5;
+            }
         }
     } else if (currentBG >= 140 && currentBG <= 180) {
         // BG 140-180 mg/dL（目標範囲内）
         if (bgChangeRate > 40) {
-            action = `インスリン投与量を増加 (+"Δ"): +${getDelta(currentRate)} 単位/時`;
+            action = `血糖値の上昇率が大きいため、インスリン投与量を増加 (+"Δ"): +${getDelta(currentRate)} 単位/時`;
             newRate = currentRate + getDelta(currentRate);
         } else if (bgChangeRate >= -20 && bgChangeRate <= 40) {
-            action = 'インスリン投与量を変更しない（目標範囲内）';
+            action = 'インスリン投与量を変更しない（目標範囲内で安定）';
         } else if (bgChangeRate < -20 && bgChangeRate >= -40) {
-            action = `インスリン投与量を減少 (-"Δ"): -${getDelta(currentRate)} 単位/時`;
+            action = `血糖値の低下率が大きいため、インスリン投与量を減少 (-"Δ"): -${getDelta(currentRate)} 単位/時`;
             newRate = Math.max(0, currentRate - getDelta(currentRate));
         } else if (bgChangeRate < -40) {
-            action = `インスリンを30分間一時中止後、投与量を減少 (-"2Δ"): -${2 * getDelta(currentRate)} 単位/時`;
+            action = `血糖値の低下率が非常に大きいため、インスリンを30分間一時中止後、投与量を減少 (-"2Δ"): -${2 * getDelta(currentRate)} 単位/時`;
             newRate = Math.max(0, currentRate - 2 * getDelta(currentRate));
         }
-    } else if (currentBG > 180 && currentBG < 250) {
-        // BG 181-249 mg/dL
-        if (bgChangeRate >= 0) {
-            action = `インスリン投与量を増加 (+"Δ"): +${getDelta(currentRate)} 単位/時`;
-            newRate = currentRate + getDelta(currentRate);
-        } else if (bgChangeRate >= -40) {
-            action = 'インスリン投与量を変更しない';
-        } else if (bgChangeRate >= -80 && bgChangeRate < -40) {
-            action = `インスリン投与量を減少 (-"Δ"): -${getDelta(currentRate)} 単位/時`;
-            newRate = Math.max(0, currentRate - getDelta(currentRate));
-        } else if (bgChangeRate < -80) {
-            action = `インスリンを30分間一時中止後、投与量を減少 (-"2Δ"): -${2 * getDelta(currentRate)} 単位/時`;
-            newRate = Math.max(0, currentRate - 2 * getDelta(currentRate));
-        }
-    } else if (currentBG >= 250) {
-        // BG ≥ 250 mg/dL
-        if (bgChangeRate > 0) {
-            action = `インスリン投与量を大幅増加 (+"2Δ"): +${2 * getDelta(currentRate)} 単位/時`;
+    } else if (currentBG > 180 && currentBG < 220) {
+        // 修正：BG 181-219 mg/dL（目標上限をやや超過）
+        if (bgChangeRate > 40) {
+            // 上昇率が大きい場合は2Δ増量
+            action = `血糖値が目標上限を超え、かつ上昇率が大きいため、インスリン投与量を大幅増加 (+"2Δ"): +${2 * getDelta(currentRate)} 単位/時`;
             newRate = currentRate + 2 * getDelta(currentRate);
-        } else if (bgChangeRate >= -40) {
-            action = `インスリン投与量を増加 (+"Δ"): +${getDelta(currentRate)} 単位/時`;
+        } else if (bgChangeRate >= 0) {
+            // 上昇中または変化なしならΔ増量
+            action = `血糖値が目標上限を超えているため、インスリン投与量を増加 (+"Δ"): +${getDelta(currentRate)} 単位/時`;
             newRate = currentRate + getDelta(currentRate);
-        } else if (bgChangeRate >= -80 && bgChangeRate < -40) {
+        } else if (bgChangeRate >= -40) {
+            // 適度に下降中なら変更なし
             action = 'インスリン投与量を変更しない（適切に低下中）';
-        } else if (bgChangeRate >= -120 && bgChangeRate < -80) {
-            action = `インスリン投与量を減少 (-"Δ"): -${getDelta(currentRate)} 単位/時`;
+        } else if (bgChangeRate < -40) {
+            // 急速に低下中ならΔ減量
+            action = `血糖値の低下率が大きいため、インスリン投与量を減少 (-"Δ"): -${getDelta(currentRate)} 単位/時`;
             newRate = Math.max(0, currentRate - getDelta(currentRate));
-        } else if (bgChangeRate < -120) {
-            action = `インスリンを30分間一時中止後、投与量を減少 (-"2Δ"): -${2 * getDelta(currentRate)} 単位/時`;
-            newRate = Math.max(0, currentRate - 2 * getDelta(currentRate));
+        }
+    } else if (currentBG >= 220 && currentBG < 300) {
+        // 修正：BG 220-299 mg/dL（目標上限を大幅超過）
+        if (bgChangeRate > 0) {
+            // 上昇中なら2Δ増量
+            action = `血糖値が目標上限を大幅に超え、かつ上昇中のため、インスリン投与量を大幅増加 (+"2Δ"): +${2 * getDelta(currentRate)} 単位/時`;
+            newRate = currentRate + 2 * getDelta(currentRate);
+        } else if (bgChangeRate >= -20) {
+            // わずかに低下中または変化なしならΔ増量
+            action = `血糖値が目標上限を大幅に超えているため、インスリン投与量を増加 (+"Δ"): +${getDelta(currentRate)} 単位/時`;
+            newRate = currentRate + getDelta(currentRate);
+        } else if (bgChangeRate >= -60) {
+            // 適度に低下中なら変更なし
+            action = 'インスリン投与量を変更しない（適切に低下中）';
+        } else {
+            // 急速に低下中ならΔ減量
+            action = `血糖値は目標より高いが低下率が非常に大きいため、インスリン投与量を減少 (-"Δ"): -${getDelta(currentRate)} 単位/時`;
+            newRate = Math.max(0, currentRate - getDelta(currentRate));
+        }
+    } else if (currentBG >= 300) {
+        // BG ≥ 300 mg/dL（重度の高血糖）
+        if (bgChangeRate >= 0) {
+            // 上昇中または変化なしなら3Δ増量（より強化）
+            action = `血糖値が300 mg/dL以上で危険域にあるため、インスリン投与量を大幅増加 (+"3Δ"): +${3 * getDelta(currentRate)} 単位/時`;
+            newRate = currentRate + 3 * getDelta(currentRate);
+        } else if (bgChangeRate >= -30) {
+            // わずかに低下中なら2Δ増量
+            action = `血糖値が300 mg/dL以上で危険域にあるため、インスリン投与量を増加 (+"2Δ"): +${2 * getDelta(currentRate)} 単位/時`;
+            newRate = currentRate + 2 * getDelta(currentRate);
+        } else if (bgChangeRate >= -80) {
+            // 適度に低下中ならΔ増量
+            action = `血糖値が目標より非常に高いため、低下中でもインスリン投与量を増加 (+"Δ"): +${getDelta(currentRate)} 単位/時`;
+            newRate = currentRate + getDelta(currentRate);
+        } else if (bgChangeRate >= -120) {
+            // 良好に低下中なら変更なし
+            action = 'インスリン投与量を変更しない（適切に低下中）';
+        } else {
+            // 急速に低下中ならΔ減量
+            action = `血糖値は目標より著しく高いが低下率が極めて大きいため、インスリン投与量を減少 (-"Δ"): -${getDelta(currentRate)} 単位/時`;
+            newRate = Math.max(0, currentRate - getDelta(currentRate));
         }
     }
     

@@ -235,6 +235,21 @@ function openTab(tabName) {
             tabButtons[i].classList.add('active');
         }
     }
+    
+    // 低血糖タブを開いた場合は前回の対応指示をクリア
+    if (tabName === 'hypo') {
+        clearHypoglycemiaResults();
+    }
+}
+
+// 低血糖対応結果をクリアする関数
+function clearHypoglycemiaResults() {
+    const hypoResult = document.getElementById('hypoResult');
+    if (hypoResult) {
+        hypoResult.style.display = 'none';
+        document.getElementById('hypoAction').textContent = '';
+        document.getElementById('hypoNotes').textContent = '';
+    }
 }
 
 // 血糖値とインスリン投与量の履歴を保存する配列
@@ -458,6 +473,8 @@ function calculateAdjustment() {
         openTab('hypo');
         document.getElementById('hypoBG').value = currentBG;
         document.getElementById('hypoRate').value = currentRate;
+        // 低血糖タブに移動する際は前回の結果をクリア
+        clearHypoglycemiaResults();
         return;
     }
     

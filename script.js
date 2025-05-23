@@ -534,8 +534,8 @@ function calculateAdjustment() {
             action = `血糖値は目標より高いが低下率が非常に大きいため、インスリン投与量を減少 (-"Δ"): -${getDelta(currentRate)} 単位/時`;
             newRate = Math.max(0, currentRate - getDelta(currentRate));
         }
-    } else if (currentBG >= 300) {
-        // BG ≥ 300 mg/dL（重度の高血糖）
+    } else if (currentBG >= 300 && currentBG < 500) {
+        // BG 300-499 mg/dL（重度の高血糖）
         if (bgChangeRate >= 0) {
             // 上昇中または変化なしなら3Δ増量（より強化）
             action = `血糖値が300 mg/dL以上で危険域にあるため、インスリン投与量を大幅増加 (+"3Δ"): +${3 * getDelta(currentRate)} 単位/時`;
@@ -555,6 +555,28 @@ function calculateAdjustment() {
             // 急速に低下中ならΔ減量
             action = `血糖値は目標より著しく高いが低下率が極めて大きいため、インスリン投与量を減少 (-"Δ"): -${getDelta(currentRate)} 単位/時`;
             newRate = Math.max(0, currentRate - getDelta(currentRate));
+        }
+    } else if (currentBG >= 500) {
+        // BG ≥ 500 mg/dL（極度の高血糖、緊急事態）
+        if (bgChangeRate >= 0) {
+            // 上昇中または変化なしなら4Δ増量（最大限の増量）+ Dr.call
+            action = `血糖値が500 mg/dL以上で極めて危険な状態です。Dr.callし、インスリン投与量を最大限増加 (+"4Δ"): +${4 * getDelta(currentRate)} 単位/時`;
+            newRate = currentRate + 4 * getDelta(currentRate);
+        } else if (bgChangeRate >= -30) {
+            // わずかに低下中なら3Δ増量 + Dr.call
+            action = `血糖値が500 mg/dL以上で極めて危険な状態です。Dr.callし、インスリン投与量を大幅増加 (+"3Δ"): +${3 * getDelta(currentRate)} 単位/時`;
+            newRate = currentRate + 3 * getDelta(currentRate);
+        } else if (bgChangeRate >= -80) {
+            // 適度に低下中なら2Δ増量 + Dr.call
+            action = `血糖値が500 mg/dL以上で極めて危険な状態です。Dr.callし、インスリン投与量を増加 (+"2Δ"): +${2 * getDelta(currentRate)} 単位/時`;
+            newRate = currentRate + 2 * getDelta(currentRate);
+        } else if (bgChangeRate >= -120) {
+            // 良好に低下中ならΔ増量 + Dr.call
+            action = `血糖値が500 mg/dL以上で極めて危険な状態です。Dr.callし、低下中でもインスリン投与量を増加 (+"Δ"): +${getDelta(currentRate)} 単位/時`;
+            newRate = currentRate + getDelta(currentRate);
+        } else {
+            // 急速に低下中でも変更なし + Dr.call
+            action = `血糖値が500 mg/dL以上で極めて危険な状態です。Dr.callし、急速低下中のためインスリン投与量を変更しない`;
         }
     }
     

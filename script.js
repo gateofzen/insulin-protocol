@@ -319,7 +319,50 @@ function updateHistoryTable() {
         rateCell.textContent = insulinRateHistory[i];
         row.appendChild(rateCell);
         
+        // 削除ボタンを追加
+        const actionCell = document.createElement('td');
+        const deleteButton = document.createElement('button');
+        deleteButton.textContent = '削除';
+        deleteButton.className = 'small-button delete-btn';
+        deleteButton.onclick = function() {
+            deleteDataPoint(i);
+        };
+        actionCell.appendChild(deleteButton);
+        row.appendChild(actionCell);
+        
         tableBody.appendChild(row);
+    }
+}
+
+// 個別のデータポイントを削除する関数
+function deleteDataPoint(index) {
+    if (index < 0 || index >= bgHistory.length) {
+        alert('削除対象のデータが見つかりません。');
+        return;
+    }
+    
+    const date = new Date(timestamps[index]);
+    const bgValue = bgHistory[index];
+    const insulinValue = insulinRateHistory[index];
+    
+    if (confirm(`以下のデータを削除しますか？この操作は元に戻せません。\n\n日時: ${date.toLocaleString()}\n血糖値: ${bgValue} mg/dL\nインスリン投与量: ${insulinValue} 単位/時`)) {
+        // 配列から該当のデータを削除
+        bgHistory.splice(index, 1);
+        insulinRateHistory.splice(index, 1);
+        timestamps.splice(index, 1);
+        
+        // 患者データを保存
+        if (currentPatient) {
+            savePatientData();
+        }
+        
+        // 表示を更新
+        updateHistoryTable();
+        if (typeof drawBGChart === 'function') {
+            drawBGChart();
+        }
+        
+        alert('データを削除しました。');
     }
 }
 

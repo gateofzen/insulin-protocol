@@ -106,7 +106,8 @@ function registerPatient() {
             bgHistory: [],
             insulinRateHistory: [],
             timestamps: [],
-            lastUpdate: null
+            lastUpdate: null,
+            lastActiveInsulinRate: null // 中止前の最後の有効投与量を記録
         };
         
         patients.push(newPatient);
@@ -158,10 +159,17 @@ function loadPatientData() {
     bgHistory = currentPatient.bgHistory || [];
     insulinRateHistory = currentPatient.insulinRateHistory || [];
     timestamps = currentPatient.timestamps || [];
+    lastActiveInsulinRate = currentPatient.lastActiveInsulinRate || null;
     
     // 最新のインスリン投与量を事前入力
     if (insulinRateHistory.length > 0) {
-        document.getElementById('currentRate').value = insulinRateHistory[insulinRateHistory.length - 1];
+        const lastRate = insulinRateHistory[insulinRateHistory.length - 1];
+        document.getElementById('currentRate').value = lastRate;
+        
+        // 中止前投与量の表示を更新
+        if (lastActiveInsulinRate !== null && lastActiveInsulinRate !== undefined) {
+            document.getElementById('lastActiveRate').value = lastActiveInsulinRate;
+        }
     }
     
     // 最新と前回の血糖値を事前入力
@@ -188,6 +196,7 @@ function savePatientData() {
     currentPatient.insulinRateHistory = insulinRateHistory;
     currentPatient.timestamps = timestamps;
     currentPatient.lastUpdate = new Date().toISOString();
+    currentPatient.lastActiveInsulinRate = lastActiveInsulinRate;
     
     // ローカルストレージに保存
     savePatients();
@@ -201,6 +210,7 @@ function clearPatientHistory() {
         bgHistory = [];
         insulinRateHistory = [];
         timestamps = [];
+        lastActiveInsulinRate = null;
         
         // 患者データを更新
         savePatientData();
@@ -256,6 +266,7 @@ function clearHypoglycemiaResults() {
 let bgHistory = [];
 let insulinRateHistory = [];
 let timestamps = [];
+let lastActiveInsulinRate = null; // 中止前の最後の有効投与量
 
 // 測定間隔に関する変数
 let stableReadingsCount = 0;
@@ -267,6 +278,11 @@ function addDataPoint(bg, insulinRate) {
     bgHistory.push(bg);
     insulinRateHistory.push(insulinRate);
     timestamps.push(now.toISOString());
+    
+    // インスリン投与量が0より大きい場合は、最後の有効投与量を更新
+    if (insulinRate > 0) {
+        lastActiveInsulinRate = insulinRate;
+    }
     
     // 最大100ポイントに制限
     if (bgHistory.length > 100) {
@@ -490,12 +506,18 @@ function calculateInitialDose() {
     }
 }
 
-// インスリン投与量の調整計算 - 目標範囲140-180mg/dLに完全最適化
+// インスリン投与量の調整計算 - 修正版：中止前投与量を適切に管理
 function calculateAdjustment() {
     const currentBG = parseFloat(document.getElementById('currentBG').value);
     const previousBG = parseFloat(document.getElementById('previousBG').value);
     const timeBetween = parseFloat(document.getElementById('timeBetween').value);
     const currentRate = parseFloat(document.getElementById('currentRate').value);
+    
+    // 中止前投与量の入力フィールドを追加（HTMLにも追加が必要）
+    let lastActiveRateInput = document.getElementById('lastActiveRate');
+    if (lastActiveRateInput && lastActiveRateInput.value) {
+        lastActiveInsulinRate = parseFloat(lastActiveRateInput.value);
+    }
     
     if (isNaN(currentBG) || isNaN(previousBG) || isNaN(timeBetween) || isNaN(currentRate) || 
         currentBG <= 0 || previousBG <= 0 || timeBetween <= 0 || currentRate < 0) {
@@ -535,13 +557,29 @@ function calculateAdjustment() {
         } else {
             // 100-109の範囲：かなり低いので一時中止または大幅減量
             if (bgChangeRate < 0) {
-                // まだ下がり続けている場合は一時中止
-                action = 'インスリン投与を一時中止し、30分後に血糖値を再確認、100 mg/dL以上の場合は前回投与量の50%でインスリンを再開';
-                newRate = 0;
+                // まだ下がり続けている場合
+                if (currentRate === 0) {
+                    // 既にインスリン中止中の場合
+                    const resumeRate = lastActiveInsulinRate ? (lastActiveInsulinRate * 0.5).toFixed(1) : 0;
+                    action = `インスリン中止継続中。30分後に血糖値を再確認、100 mg/dL以上の場合は中止前投与量（${lastActiveInsulinRate || '不明'} 単位/時）の50%（${resumeRate} 単位/時）でインスリンを再開`;
+                    newRate = 0;
+                } else {
+                    // インスリン投与中の場合は中止
+                    action = `インスリン投与を一時中止。30分後に血糖値を再確認、100 mg/dL以上の場合は中止前投与量（${currentRate} 単位/時）の50%（${(currentRate * 0.5).toFixed(1)} 単位/時）でインスリンを再開`;
+                    lastActiveInsulinRate = currentRate; // 中止前の投与量を記録
+                    newRate = 0;
+                }
             } else {
                 // 上昇に転じている場合は大幅減量
-                action = `血糖値が目標範囲から大幅に低下しています。インスリン投与量を半減: 前回の${currentRate}単位/時から${(currentRate * 0.5).toFixed(1)}単位/時に減量`;
-                newRate = currentRate * 0.5;
+                if (currentRate === 0) {
+                    // 既に中止中で上昇している場合
+                    const resumeRate = lastActiveInsulinRate ? (lastActiveInsulinRate * 0.5).toFixed(1) : 0;
+                    action = `血糖値が上昇中。インスリンを中止前投与量（${lastActiveInsulinRate || '不明'} 単位/時）の50%（${resumeRate} 単位/時）で再開を検討`;
+                    newRate = lastActiveInsulinRate ? lastActiveInsulinRate * 0.5 : 0;
+                } else {
+                    action = `血糖値が目標範囲から大幅に低下しています。インスリン投与量を半減: ${currentRate}単位/時から${(currentRate * 0.5).toFixed(1)}単位/時に減量`;
+                    newRate = currentRate * 0.5;
+                }
             }
         }
     } else if (currentBG >= 140 && currentBG <= 180) {
@@ -709,20 +747,23 @@ function handleHypoglycemia() {
     let notes = '';
     let resumeRate = 0;
     
+    // 中止前投与量を取得（現在0の場合は記録された値を使用）
+    const referenceRate = hypoRate > 0 ? hypoRate : (lastActiveInsulinRate || 0);
+    
     if (hypoBG < 50) {
         // 日本の製剤サイズに合わせて修正（50%ブドウ糖40mL）+ Dr.call
         action = 'インスリン投与を直ちに中止し、50%ブドウ糖液40mL（2アンプル）を静注してDr.call';
-        notes = '15分ごとに血糖値を再測定し、90 mg/dL以上になるまで継続。その後1時間ごとに測定し、140 mg/dL以上になったら30分待ってから前回の投与量の50%でインスリンを再開';
-        resumeRate = hypoRate * 0.5;
+        notes = `15分ごとに血糖値を再測定し、90 mg/dL以上になるまで継続。その後1時間ごとに測定し、140 mg/dL以上になったら30分待ってから中止前投与量（${referenceRate} 単位/時）の50%でインスリンを再開`;
+        resumeRate = referenceRate * 0.5;
     } else if (hypoBG >= 50 && hypoBG < 75) {
         // 日本の製剤サイズに合わせて修正（50%ブドウ糖20mL）+ Dr.call
         action = 'インスリン投与を直ちに中止し、50%ブドウ糖液20mL（1アンプル）を静注してDr.call';
-        notes = '15分ごとに血糖値を再測定し、90 mg/dL以上になるまで継続。その後1時間ごとに測定し、140 mg/dL以上になったら30分待ってから前回の投与量の50%でインスリンを再開';
-        resumeRate = hypoRate * 0.5;
+        notes = `15分ごとに血糖値を再測定し、90 mg/dL以上になるまで継続。その後1時間ごとに測定し、140 mg/dL以上になったら30分待ってから中止前投与量（${referenceRate} 単位/時）の50%でインスリンを再開`;
+        resumeRate = referenceRate * 0.5;
     } else if (hypoBG >= 75 && hypoBG < 100) {
         action = 'インスリン投与を直ちに中止';
-        notes = '15分ごとに血糖値を再測定し、90 mg/dL以上であることを確認。その後1時間ごとに測定し、140 mg/dL以上になったら30分待ってから前回の投与量の75%でインスリンを再開';
-        resumeRate = hypoRate * 0.75;
+        notes = `15分ごとに血糖値を再測定し、90 mg/dL以上であることを確認。その後1時間ごとに測定し、140 mg/dL以上になったら30分待ってから中止前投与量（${referenceRate} 単位/時）の75%でインスリンを再開`;
+        resumeRate = referenceRate * 0.75;
     }
     
     // 結果の表示
@@ -732,6 +773,11 @@ function handleHypoglycemia() {
     
     // 履歴に追加
     addDataPoint(hypoBG, 0); // 低血糖時はインスリン投与量0
+    
+    // 現在のインスリン投与量が0より大きい場合、中止前投与量として記録
+    if (hypoRate > 0) {
+        lastActiveInsulinRate = hypoRate;
+    }
 }
 
 // Δ値の取得（現在のインスリン投与量に基づく）

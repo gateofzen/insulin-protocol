@@ -101,6 +101,12 @@
                     <div class="form-group">
                         <label for="currentRate">現在のインスリン投与量 (単位/時):</label>
                         <input type="number" id="currentRate" min="0" step="0.5">
+                        <small style="color: #666;">※ 現在中止中の場合は0を入力</small>
+                    </div>
+                    <div class="form-group">
+                        <label for="lastActiveRate">中止前の投与量 (単位/時):</label>
+                        <input type="number" id="lastActiveRate" min="0" step="0.5" placeholder="中止前の投与量を入力">
+                        <small style="color: #666;">※ インスリン中止前の最後の投与量（再開時の基準値）</small>
                     </div>
                     <button onclick="calculateAdjustment()">調整計算</button>
                     
@@ -122,6 +128,7 @@
                     <div class="form-group">
                         <label for="hypoRate">現在のインスリン投与量 (単位/時):</label>
                         <input type="number" id="hypoRate" min="0" step="0.5">
+                        <small style="color: #666;">※ 現在中止中の場合は0、投与中の場合は現在の投与量を入力</small>
                     </div>
                     <button onclick="handleHypoglycemia()">対応確認</button>
                     
@@ -181,9 +188,9 @@
                     
                     <h3>低血糖時の対応</h3>
                     <ul>
-                        <li><strong>血糖値 &lt;50 mg/dL:</strong> インスリン投与を直ちに中止し、50%ブドウ糖液40mL（2アンプル）を静注してDr.call。15分ごとに血糖値を再測定し、90 mg/dL以上になるまで継続。その後1時間ごとに測定し、140 mg/dL以上になったら30分待ってから前回の投与量の50%でインスリンを再開。</li>
-                        <li><strong>血糖値 50-74 mg/dL:</strong> インスリン投与を直ちに中止し、50%ブドウ糖液20mL（1アンプル）を静注してDr.call。15分ごとに血糖値を再測定し、90 mg/dL以上になるまで継続。その後1時間ごとに測定し、140 mg/dL以上になったら30分待ってから前回の投与量の50%でインスリンを再開。</li>
-                        <li><strong>血糖値 75-99 mg/dL:</strong> インスリン投与を直ちに中止。15分ごとに血糖値を再測定し、90 mg/dL以上であることを確認。その後1時間ごとに測定し、140 mg/dL以上になったら30分待ってから前回の投与量の75%でインスリンを再開。</li>
+                        <li><strong>血糖値 &lt;50 mg/dL:</strong> インスリン投与を直ちに中止し、50%ブドウ糖液40mL（2アンプル）を静注してDr.call。15分ごとに血糖値を再測定し、90 mg/dL以上になるまで継続。その後1時間ごとに測定し、140 mg/dL以上になったら30分待ってから中止前投与量の50%でインスリンを再開。</li>
+                        <li><strong>血糖値 50-74 mg/dL:</strong> インスリン投与を直ちに中止し、50%ブドウ糖液20mL（1アンプル）を静注してDr.call。15分ごとに血糖値を再測定し、90 mg/dL以上になるまで継続。その後1時間ごとに測定し、140 mg/dL以上になったら30分待ってから中止前投与量の50%でインスリンを再開。</li>
+                        <li><strong>血糖値 75-99 mg/dL:</strong> インスリン投与を直ちに中止。15分ごとに血糖値を再測定し、90 mg/dL以上であることを確認。その後1時間ごとに測定し、140 mg/dL以上になったら30分待ってから中止前投与量の75%でインスリンを再開。</li>
                     </ul>
                     
                     <h3>高血糖時の対応</h3>
@@ -229,11 +236,19 @@
                             <td>8</td>
                         </tr>
                     </table>
+                    
+                    <h3>重要：インスリン再開時の注意</h3>
+                    <div class="info-box" style="background-color: #fff3cd; border: 1px solid #ffc107; padding: 10px; margin-top: 15px;">
+                        <strong>インスリン中止後の再開について：</strong><br>
+                        インスリン再開時は必ず「中止前の最後の有効投与量」を基準とします。<br>
+                        例：中止前2単位/時 → 再開時は1単位/時（50%）<br>
+                        ※ 現在の投与量が0の場合、「中止前投与量」欄に中止前の値を入力してください。
+                    </div>
                 </div>
             </div>
         </div>
     </div>
 
-    <script src="script.js"></script>
+    <script src="script_fixed.js"></script>
 </body>
 </html>
